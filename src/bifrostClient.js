@@ -145,39 +145,44 @@ export class BifrostClient {
     return data?.guildGetGameState ?? null;
   }
 
-  /** guildAddVip — rate limit 150 req / 5min per server */
+  /**
+   * guildAddVip — rate limit 150 req / 5min per server
+   *
+   * NOTE: Bifrost's public docs (developer.bifrostgaming.com/hll/endpoints/add-vip)
+   * show flat arguments (serverId/playerId/playerName/gameType) and a
+   * {success, message} response, but the LIVE schema rejects that with a 400
+   * ("Unknown argument", confirmed on Render). The live schema actually
+   * requires an `input: GuildAddVipInput!` wrapper (matching the pattern
+   * already documented — and confirmed working — for guildSendMessageToAll
+   * and guildSetVIPSlotCount), and its response type (GuildVipMutationResponse,
+   * named in the live error text) has no `message` field — only `success`
+   * is confirmed to exist. Docs are simply stale for this endpoint.
+   */
   async addVip(playerId, playerName) {
     const query = `
-      mutation AddVip($serverId: ID!, $playerId: String!, $playerName: String!, $gameType: String) {
-        guildAddVip(serverId: $serverId, playerId: $playerId, playerName: $playerName, gameType: $gameType) {
+      mutation AddVip($input: GuildAddVipInput!) {
+        guildAddVip(input: $input) {
           success
-          message
         }
       }
     `;
     const data = await this._graphqlRequest(query, {
-      serverId: this.serverId,
-      playerId,
-      playerName,
-      gameType: this.gameType,
+      input: { serverId: this.serverId, playerId, playerName, gameType: this.gameType },
     });
     return data?.guildAddVip ?? null;
   }
 
-  /** guildRemoveVip — rate limit 150 req / 5min per server */
+  /** guildRemoveVip — rate limit 150 req / 5min per server. See addVip() note above; same input-wrapper fix applies. */
   async removeVip(playerId) {
     const query = `
-      mutation RemoveVip($serverId: ID!, $playerId: String!, $gameType: String) {
-        guildRemoveVip(serverId: $serverId, playerId: $playerId, gameType: $gameType) {
+      mutation RemoveVip($input: GuildRemoveVipInput!) {
+        guildRemoveVip(input: $input) {
           success
-          message
         }
       }
     `;
     const data = await this._graphqlRequest(query, {
-      serverId: this.serverId,
-      playerId,
-      gameType: this.gameType,
+      input: { serverId: this.serverId, playerId, gameType: this.gameType },
     });
     return data?.guildRemoveVip ?? null;
   }

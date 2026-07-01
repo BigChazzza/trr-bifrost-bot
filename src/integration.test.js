@@ -73,15 +73,17 @@ function makeFakeFetch({ recordCalls } = {}) {
       }
 
       if (query.includes('guildAddVip')) {
-        const { playerId } = body.variables;
+        // Live schema wraps args in an `input` object and the response type
+        // (GuildVipMutationResponse) only has `success` - no `message` field.
+        const { playerId } = body.variables.input;
         vips.add(playerId);
-        return { ok: true, status: 200, json: async () => ({ data: { guildAddVip: { success: true, message: 'Player added to VIP list' } } }) };
+        return { ok: true, status: 200, json: async () => ({ data: { guildAddVip: { success: true } } }) };
       }
 
       if (query.includes('guildRemoveVip')) {
-        const { playerId } = body.variables;
+        const { playerId } = body.variables.input;
         vips.delete(playerId);
-        return { ok: true, status: 200, json: async () => ({ data: { guildRemoveVip: { success: true, message: 'Player removed from VIP list' } } }) };
+        return { ok: true, status: 200, json: async () => ({ data: { guildRemoveVip: { success: true } } }) };
       }
 
       if (query.includes('guildSendMessageToAll')) {
@@ -107,7 +109,7 @@ function makeFakeFetch({ recordCalls } = {}) {
   return { fetchFn, vips, messages, getTokenIssuedCount: () => tokenIssued };
 }
 
-test('end-to-end: poll -> announce current leader', async () => {
+test('end-to-end: poll -> announce current leader (Murder Machine / Wooden Spoon)', async () => {
   const { fetchFn, messages } = makeFakeFetch();
   const bifrost = new BifrostClient({ clientId: 'id', clientSecret: 'secret', serverId: 'server-1', fetchFn });
   const db = openDb(':memory:');
@@ -123,12 +125,14 @@ test('end-to-end: poll -> announce current leader', async () => {
   assert.ok(gameState);
   tracker.processPoll(players.players, gameState);
 
-  // A later poll 30s on: kills have climbed further, producing a real delta
-  // to announce (this is what the 15-min announcer actually reads).
+  // A later poll 30s on: kills/deaths have climbed further, producing real
+  // deltas to announce (this is what the 15-min announcer actually reads).
+  // Alice: kills 10 -> 22 (+12). Bob: deaths 15 -> 16 (+1)... make Bob the
+  // clear death leader by giving Alice fewer deaths than her baseline delta.
   tracker.processPoll(
     [
-      { playerId: 'p1', playerName: 'Alice', kills: 22, deaths: 3 },
-      { playerId: 'p2', playerName: 'Bob', kills: 4, deaths: 16 },
+      { playerId: 'p1', playerName: 'Alice', kills: 22, deaths: 2 },
+      { playerId: 'p2', playerName: 'Bob', kills: 4, deaths: 20 },
     ],
     { data: { currentMap: 'Carentan' }, matchTimeRemainingSeconds: 1170 }
   );
@@ -136,8 +140,10 @@ test('end-to-end: poll -> announce current leader', async () => {
   await announceCurrentLeaders({ db, bifrost });
 
   assert.equal(messages.length, 1);
-  assert.match(messages[0], /Alice/);
-  assert.match(messages[0], /12 kills/); // 22 - baseline 10
+  assert.equal(
+    messages[0],
+    'Murder Machine - Alice has the most kills with 12. Wooden Spoon - Bob has the most deaths with 5'
+  );
 
   db.close();
 });

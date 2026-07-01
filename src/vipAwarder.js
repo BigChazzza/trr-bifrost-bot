@@ -28,7 +28,7 @@ export async function awardMatchEndVIPs({ db, bifrost, endedMatchEpoch }) {
       db.recordVipGrant(leader.playerId, leader.playerName, 'most_kills', endedMatchEpoch, expiresAt);
       console.log(`[vip] granted 7-day VIP to ${leader.playerName} (most kills: ${leader.kills})`);
     } else {
-      console.error(`[vip] failed to grant VIP to ${leader.playerName} for most kills:`, result?.message);
+      console.error(`[vip] failed to grant VIP to ${leader.playerName} for most kills:`, JSON.stringify(result));
     }
   }
 
@@ -38,7 +38,7 @@ export async function awardMatchEndVIPs({ db, bifrost, endedMatchEpoch }) {
       db.recordVipGrant(leader.playerId, leader.playerName, 'most_deaths', endedMatchEpoch, expiresAt);
       console.log(`[vip] granted 7-day VIP to ${leader.playerName} (most deaths: ${leader.deaths})`);
     } else {
-      console.error(`[vip] failed to grant VIP to ${leader.playerName} for most deaths:`, result?.message);
+      console.error(`[vip] failed to grant VIP to ${leader.playerName} for most deaths:`, JSON.stringify(result));
     }
   }
 
@@ -75,7 +75,7 @@ export async function sweepExpiredVips({ db, bifrost }) {
       console.log(`[vip] revoked expired VIP for ${grant.player_name} (reason: ${grant.reason})`);
     } else {
       // Leave it unrevoked so the next hourly sweep retries; log for visibility.
-      console.error(`[vip] failed to revoke expired VIP for ${grant.player_name}:`, result?.message);
+      console.error(`[vip] failed to revoke expired VIP for ${grant.player_name}:`, JSON.stringify(result));
     }
   }
 }
