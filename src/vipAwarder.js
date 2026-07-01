@@ -97,6 +97,20 @@ export async function awardMatchEndVIPs({ db, bifrost, endedMatchEpoch }) {
     }
   }
 
+  const hasAnyWinner = CATEGORIES.some(({ reason }) => leadersByCategory[reason].length > 0);
+  if (!hasAnyWinner) {
+    // Nothing to congratulate anyone for (e.g. a match that ended almost
+    // immediately after the bot started tracking it, before anyone racked
+    // up a single kill/death/combat/defense point). Without this guard,
+    // formatStatsMessage would still render the header alone - a hollow
+    // "Congratulations! You've won yourselves 7-day VIP!" with no names -
+    // which is exactly the "VIP info shown with no actual winners" bug
+    // this check exists to prevent. Never send VIP-related text unless
+    // there's a real winner to announce.
+    console.log(`[vip] match ${endedMatchEpoch} had no winners in any category, skipping VIP announcement`);
+    return;
+  }
+
   const message = formatStatsMessage({
     header: 'Congratulations! You’ve won yourselves 7-day VIP!',
     killLeaders: leadersByCategory.most_kills,

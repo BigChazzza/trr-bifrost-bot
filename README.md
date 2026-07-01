@@ -33,10 +33,15 @@ leader in each category in-game every 15 minutes, and automatically awards
   — the header and signature are never touched.
 - **VIP awards (at match end only):** grants VIP via `guildAddVip` to every
   player tied for the top spot in each of the four categories, then sends a
-  "Congratulations!" announcement in the same format. Bifrost's
-  `guildAddVip` has no duration parameter, so this bot tracks its own 7-day
-  expiry in SQLite and calls `guildRemoveVip` itself once expired (checked
-  hourly).
+  "Congratulations!" announcement in the same format. **VIP information is
+  never shown at any other time** — not on the 15-minute leaderboard
+  announcement, and not even at match-end if nobody actually won anything
+  in any category (e.g. a very short match, or one that ends right after
+  the bot starts/restarts before any stats accumulate) — in that case no
+  announcement is sent at all, rather than a hollow "Congratulations!" with
+  no names in it. Bifrost's `guildAddVip` has no duration parameter, so
+  this bot tracks its own 7-day expiry in SQLite and calls `guildRemoveVip`
+  itself once expired (checked hourly).
 - **Pre-existing VIP is never touched:** if a player already has VIP before
   the bot ever grants them anything (e.g. an existing TRR clan member),
   they're still announced and "awarded" normally, but the bot permanently

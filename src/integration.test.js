@@ -214,6 +214,42 @@ test('end-to-end: match transition awards VIP across all four categories and ann
   db.close();
 });
 
+test('end-to-end: a match transition with NO winners in any category sends no VIP announcement at all', async () => {
+  // Regression test for a real bug seen in production: a match that ends
+  // almost immediately (e.g. right after the bot starts/restarts, so
+  // everyone's deltas are still 0) must NOT trigger a hollow
+  // "Congratulations! You've won yourselves 7-day VIP!" message with no
+  // winners listed - that's VIP text appearing with nothing earned, which
+  // looked like "VIP info shown at the start of the match" to players.
+  const { fetchFn, vips, messages } = makeFakeFetch({
+    initialPlayers: [{ playerId: 'p1', playerName: 'Alice', kills: 0, deaths: 0, combatScore: 0, defenseScore: 0 }],
+  });
+  const bifrost = new BifrostClient({ clientId: 'id', clientSecret: 'secret', serverId: 'server-1', fetchFn });
+  const db = openDb(':memory:');
+  const tracker = new MatchTracker(db);
+
+  const players1 = await bifrost.getPlayers();
+  const gameState1 = await bifrost.getGameState();
+  tracker.processPoll(players1.players, gameState1); // baseline poll, delta 0 for everyone
+
+  // Map changes almost immediately - nobody ever accumulated a single
+  // kill/death/combat/defense point above their baseline before the
+  // transition. This is the scenario that reproduced the bug.
+  const result = tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 0, deaths: 0, combatScore: 0, defenseScore: 0 }],
+    { data: { currentMap: 'Hurtgen Forest' }, matchTimeRemainingSeconds: 1800 }
+  );
+  assert.equal(result.transitioned, true);
+
+  await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch: result.endedMatchEpoch });
+
+  assert.equal(messages.length, 0, 'no announcement of any kind should be sent when nobody won anything');
+  assert.ok(!vips.has('p1'), 'no VIP should be granted when nobody won anything');
+  assert.equal(db.getVipStatus('p1'), undefined, 'no vip_status row should be created for a non-winner');
+
+  db.close();
+});
+
 test('end-to-end: a player who already had VIP is announced as a winner but never auto-revoked', async () => {
   // Alice already has VIP (e.g. an existing TRR clan member) before the
   // bot ever grants anything.
