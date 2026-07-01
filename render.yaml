@@ -1,0 +1,21 @@
+services:
+  - type: worker
+    name: trr-bifrost-bot
+    runtime: node
+    plan: starter
+    buildCommand: npm install
+    startCommand: npm start
+    autoDeploy: true
+    disk:
+      name: trr-bot-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - key: BIFROST_CLIENT_ID
+        sync: false
+      - key: BIFROST_CLIENT_SECRET
+        sync: false
+      - key: BIFROST_SERVER_ID
+        sync: false
+      - key: DB_PATH
+        value: /data/trr-bot.db
