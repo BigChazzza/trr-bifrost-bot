@@ -143,8 +143,8 @@ test('end-to-end: poll -> announce current leader across all four categories', a
     messages[0],
     'Killing Machine - Alice (12) Kills\n' +
       'Having a day - Bob (5) Deaths\n' +
-      'Rambo - Alice (350)\n' +
-      'Brick wall - Bob (330)\n' +
+      'Rambo (Combat) - Alice (350)\n' +
+      'Brick wall (Defence) - Bob (330)\n' +
       '\n' +
       '-BigChazzza Bot'
   );
@@ -200,8 +200,8 @@ test('end-to-end: match transition awards VIP across all four categories and ann
     'Congratulations! You’ve won yourselves 7-day VIP!\n' +
       'Killing Machine - Alice (15) Kills\n' +
       'Having a day - Bob (15) Deaths\n' +
-      'Rambo - Bob (200)\n' +
-      'Brick wall - Alice (30)\n' +
+      'Rambo (Combat) - Bob (200)\n' +
+      'Brick wall (Defence) - Alice (30)\n' +
       '\n' +
       '-BigChazzza Bot'
   );

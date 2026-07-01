@@ -20,8 +20,8 @@ leader in each category in-game every 15 minutes, and automatically awards
   ```
   Killing Machine - Alice (22) Kills
   Having a day - Bob (15) Deaths
-  Rambo - Carl (450)
-  Brick wall - Dave (380)
+  Rambo (Combat) - Carl (450)
+  Brick wall (Defence) - Dave (380)
 
   -BigChazzza Bot
   ```
@@ -29,8 +29,8 @@ leader in each category in-game every 15 minutes, and automatically awards
   are listed as comma-separated names. If the message would exceed
   Bifrost's 200-character cap, tied-name lists are trimmed with "+N more"
   first, then (if still too long) whole categories are dropped starting
-  with the lowest-priority one (Brick wall, then Rambo) — the header and
-  signature are never touched.
+  with the lowest-priority one (Brick wall (Defence), then Rambo (Combat))
+  — the header and signature are never touched.
 - **VIP awards (at match end only):** grants VIP via `guildAddVip` to every
   player tied for the top spot in each of the four categories, then sends a
   "Congratulations!" announcement in the same format. Bifrost's

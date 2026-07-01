@@ -56,8 +56,8 @@ test('formatStatsMessage renders all four categories in priority order with the 
     msg,
     'Killing Machine - Alice (22) Kills\n' +
       'Having a day - Bob (15) Deaths\n' +
-      'Rambo - Carl (450)\n' +
-      'Brick wall - Dave (380)\n' +
+      'Rambo (Combat) - Carl (450)\n' +
+      'Brick wall (Defence) - Dave (380)\n' +
       '\n' +
       '-BigChazzza Bot'
   );
@@ -80,7 +80,7 @@ test('formatStatsMessage omits categories with no leaders', () => {
     combatLeaders: [],
     defenseLeaders: [{ playerName: 'Dave', defenseScore: 100 }],
   });
-  assert.equal(msg, 'Killing Machine - Alice (5) Kills\nBrick wall - Dave (100)\n\n-BigChazzza Bot');
+  assert.equal(msg, 'Killing Machine - Alice (5) Kills\nBrick wall (Defence) - Dave (100)\n\n-BigChazzza Bot');
 });
 
 test('formatStatsMessage returns null when there is nothing to report and no header', () => {
@@ -141,8 +141,8 @@ test('formatStatsMessage trims tied-name lists (longest first) before dropping w
   // Lower-priority lines should survive as long as possible while the long
   // tied-name list gets trimmed first.
   assert.match(msg, /Having a day/);
-  assert.match(msg, /Rambo/);
-  assert.match(msg, /Brick wall/);
+  assert.match(msg, /Rambo \(Combat\)/);
+  assert.match(msg, /Brick wall \(Defence\)/);
   assert.match(msg, /-BigChazzza Bot/);
 });
 

@@ -40,13 +40,13 @@ function renderLine(spec, keepCount) {
 
 /**
  * Assembles the four stat-line specs (Killing Machine / Having a day /
- * Rambo / Brick wall, in that priority order) plus an optional header line
- * and trailing signature into one message, e.g.:
+ * Rambo (Combat) / Brick wall (Defence), in that priority order) plus an
+ * optional header line and trailing signature into one message, e.g.:
  *
  *   Killing Machine - Alice (22) Kills
  *   Having a day - Bob (15) Deaths
- *   Rambo - Carl (450)
- *   Brick wall - Dave (380)
+ *   Rambo (Combat) - Carl (450)
+ *   Brick wall (Defence) - Dave (380)
  *
  *   -BigChazzza Bot
  *
@@ -56,8 +56,8 @@ function renderLine(spec, keepCount) {
  * Truncation strategy to respect maxLength (Bifrost's 200-char cap): first
  * trim tied-name lists one name at a time (always trimming whichever line
  * currently has the most names), then - if still too long - drop whole
- * lines starting from the lowest-priority end (Brick wall, then Rambo)
- * before ever touching the header or signature.
+ * lines starting from the lowest-priority end (Brick wall (Defence), then
+ * Rambo (Combat)) before ever touching the header or signature.
  */
 export function formatStatsMessage(
   { header, killLeaders, deathLeaders, combatLeaders, defenseLeaders },
@@ -67,8 +67,8 @@ export function formatStatsMessage(
   const specs = [
     buildStatLineSpec('Killing Machine', killLeaders, 'kills', 'Kills'),
     buildStatLineSpec('Having a day', deathLeaders, 'deaths', 'Deaths'),
-    buildStatLineSpec('Rambo', combatLeaders, 'combatScore'),
-    buildStatLineSpec('Brick wall', defenseLeaders, 'defenseScore'),
+    buildStatLineSpec('Rambo (Combat)', combatLeaders, 'combatScore'),
+    buildStatLineSpec('Brick wall (Defence)', defenseLeaders, 'defenseScore'),
   ].filter(Boolean);
 
   if (!specs.length && !header) return null;
