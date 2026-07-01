@@ -23,8 +23,17 @@ the player(s) with the most kills and the player(s) with the most deaths.
   Bifrost's `guildAddVip` has no duration parameter, so this bot tracks its
   own 7-day expiry in SQLite and calls `guildRemoveVip` itself once expired
   (checked hourly).
-- **Persistence:** all match/leaderboard/VIP state lives in a SQLite file so
-  the bot can restart mid-match without losing progress.
+- **Persistence:** all match/leaderboard/VIP state lives in a SQLite file
+  (via Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html)
+  module — no native dependency to compile) so the bot can restart mid-match
+  without losing progress.
+
+## Requirements
+
+Node.js **v22.13.0 or later** (needed for `node:sqlite`, which ships in Node
+itself with no native build step — this avoids the native-module compile
+failures that occur with packages like `better-sqlite3` on newer Node/V8
+versions in managed environments such as Render).
 
 ## Local setup
 

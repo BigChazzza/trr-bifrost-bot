@@ -5,14 +5,13 @@
   "main": "src/index.js",
   "type": "module",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
-    "start": "node src/index.js",
-    "test": "node --test src/**/*.test.js"
+    "start": "node --disable-warning=ExperimentalWarning src/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test src/**/*.test.js"
   },
   "dependencies": {
-    "better-sqlite3": "^11.3.0",
     "dotenv": "^16.4.5"
   },
   "license": "UNLICENSED",

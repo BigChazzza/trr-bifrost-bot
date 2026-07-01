@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS matches (
@@ -41,8 +41,9 @@ CREATE TABLE IF NOT EXISTS bot_state (
  * statements. Kept as one module so every consumer shares one connection.
  */
 export function openDb(dbPath) {
-  const db = new Database(dbPath);
-  db.pragma('journal_mode = WAL');
+  const db = new DatabaseSync(dbPath);
+  // node:sqlite has no .pragma() helper - PRAGMAs are just run via .exec().
+  db.exec('PRAGMA journal_mode = WAL');
   db.exec(SCHEMA);
 
   const stmts = {
