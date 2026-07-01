@@ -17,7 +17,7 @@ export class MatchTracker {
   }
 
   /**
-   * @param {Array<{playerId: string, playerName: string, kills: number, deaths: number}>} players
+   * @param {Array<{playerId: string, playerName: string, kills: number, deaths: number, isVip?: boolean, combatScore?: number, defenseScore?: number}>} players
    * @param {{data?: {currentMap?: string}, matchTimeRemainingSeconds?: number} | null} gameState
    * @returns {{transitioned: boolean, endedMatchEpoch: number|null, currentMatchEpoch: number, mapName: string|null}}
    */
@@ -64,7 +64,10 @@ export class MatchTracker {
         player.playerId,
         player.playerName ?? player.playerId,
         player.kills ?? 0,
-        player.deaths ?? 0
+        player.deaths ?? 0,
+        player.isVip ?? false,
+        player.combatScore ?? 0,
+        player.defenseScore ?? 0
       );
     }
 

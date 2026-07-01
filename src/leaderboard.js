@@ -1,8 +1,8 @@
 /**
- * Given deltas like [{playerId, playerName, kills, deaths}], returns the
- * players tied for the maximum value of the given stat key. Returns an
- * empty array if the max value is 0 or there are no players (no meaningful
- * leader to report/award in that case).
+ * Given deltas like [{playerId, playerName, kills, deaths, combatScore, defenseScore}],
+ * returns the players tied for the maximum value of the given stat key.
+ * Returns an empty array if the max value is 0 or there are no players (no
+ * meaningful leader to report/award in that case).
  */
 export function findTiedLeaders(deltas, statKey) {
   if (!deltas?.length) return [];
@@ -14,92 +14,103 @@ export function findTiedLeaders(deltas, statKey) {
 }
 
 /**
- * Formats a list of tied leaders + a stat label into a single-line message,
- * truncating the player-name list if needed to stay within maxLength
- * (Bifrost's guildSendMessageToAll caps at 200 chars post-trim).
+ * Builds a line "spec" (label, tied player names, value, optional trailing
+ * word) for one stat category. Returns null if there are no leaders for
+ * this category yet (so the caller can omit the line entirely).
  */
-export function formatLeaderMessage(leaders, statLabel, value, maxLength = 200) {
-  if (!leaders.length) return null;
-
-  const names = leaders.map((l) => l.playerName);
-  let namesPart = names.join(', ');
-  const suffix = ` (${value} ${statLabel})`;
-  const prefix = leaders.length > 1 ? 'Tied leaders: ' : 'Leader: ';
-
-  let message = `${prefix}${namesPart}${suffix}`;
-
-  if (message.length > maxLength) {
-    // Trim names one at a time, appending "+N more" until it fits.
-    let kept = [...names];
-    while (kept.length > 1) {
-      kept.pop();
-      const extra = names.length - kept.length;
-      namesPart = `${kept.join(', ')} +${extra} more`;
-      message = `${prefix}${namesPart}${suffix}`;
-      if (message.length <= maxLength) break;
-    }
-    if (message.length > maxLength) {
-      // Even a single name + suffix doesn't fit (pathological edge case) -
-      // hard truncate as a last resort.
-      message = message.slice(0, maxLength);
-    }
-  }
-
-  return message;
+function buildStatLineSpec(label, leaders, valueKey, suffix = '') {
+  if (!leaders?.length) return null;
+  return {
+    label,
+    names: leaders.map((l) => l.playerName),
+    value: leaders[0][valueKey],
+    suffix,
+  };
 }
 
-function buildStatLine(label, names, statLabel, value) {
-  const verb = names.length > 1 ? 'have' : 'has';
-  return `${label} - ${names.join(', ')} ${verb} the ${statLabel} with ${value}`;
+/** Renders one line spec to text, showing only the first `keepCount` names (+ "+N more" if trimmed). */
+function renderLine(spec, keepCount) {
+  const total = spec.names.length;
+  const shown = keepCount ?? total;
+  let names = spec.names.slice(0, shown);
+  if (shown < total) names = [...names, `+${total - shown} more`];
+  const suffixPart = spec.suffix ? ` ${spec.suffix}` : '';
+  return `${spec.label} - ${names.join(', ')} (${spec.value})${suffixPart}`;
 }
 
 /**
- * Formats the combined 15-minute leaderboard announcement:
- *   "Murder Machine - Alice has the most kills with 22. Wooden Spoon - Bob has the most deaths with 15"
- * Handles ties on either stat by joining names with commas ("have" instead
- * of "has"). Omits a side entirely if there are no leaders for it yet (e.g.
- * very early in a match). Returns null if there's nothing to announce at all.
- * Truncates name lists (kills side first, since it's the primary stat) if
- * the combined message would exceed maxLength (Bifrost's 200-char cap).
+ * Assembles the four stat-line specs (Killing Machine / Having a day /
+ * Rambo / Brick wall, in that priority order) plus an optional header line
+ * and trailing signature into one message, e.g.:
+ *
+ *   Killing Machine - Alice (22) Kills
+ *   Having a day - Bob (15) Deaths
+ *   Rambo - Carl (450)
+ *   Brick wall - Dave (380)
+ *
+ *   -BigChazzza Bot
+ *
+ * Categories with no leaders yet are omitted entirely. Returns null if
+ * there's nothing to report in any category (and no header was given).
+ *
+ * Truncation strategy to respect maxLength (Bifrost's 200-char cap): first
+ * trim tied-name lists one name at a time (always trimming whichever line
+ * currently has the most names), then - if still too long - drop whole
+ * lines starting from the lowest-priority end (Brick wall, then Rambo)
+ * before ever touching the header or signature.
  */
-export function formatMurderMachineMessage(killLeaders, deathLeaders, maxLength = 200) {
-  const killNames = killLeaders.map((l) => l.playerName);
-  const deathNames = deathLeaders.map((l) => l.playerName);
-  const killValue = killLeaders[0]?.kills;
-  const deathValue = deathLeaders[0]?.deaths;
+export function formatStatsMessage(
+  { header, killLeaders, deathLeaders, combatLeaders, defenseLeaders },
+  maxLength = 200,
+  signature = '-BigChazzza Bot'
+) {
+  const specs = [
+    buildStatLineSpec('Killing Machine', killLeaders, 'kills', 'Kills'),
+    buildStatLineSpec('Having a day', deathLeaders, 'deaths', 'Deaths'),
+    buildStatLineSpec('Rambo', combatLeaders, 'combatScore'),
+    buildStatLineSpec('Brick wall', defenseLeaders, 'defenseScore'),
+  ].filter(Boolean);
 
-  if (!killNames.length && !deathNames.length) return null;
+  if (!specs.length && !header) return null;
 
-  const render = (kNames, dNames) => {
-    const parts = [];
-    if (kNames.length) parts.push(buildStatLine('Murder Machine', kNames, 'most kills', killValue));
-    if (dNames.length) parts.push(buildStatLine('Wooden Spoon', dNames, 'most deaths', deathValue));
-    return parts.join('. ');
-  };
+  function render(activeSpecs, keepCounts) {
+    const lines = activeSpecs.map((spec, i) => renderLine(spec, keepCounts[i]));
+    const bodyParts = header ? [header, ...lines] : lines;
+    let message = bodyParts.join('\n');
+    if (signature) message += `\n\n${signature}`;
+    return message;
+  }
 
-  let message = render(killNames, deathNames);
-  if (message.length <= maxLength) return message;
+  let activeSpecs = specs;
+  let keepCounts = activeSpecs.map((s) => s.names.length);
+  let message = render(activeSpecs, keepCounts);
 
-  // Trim the longer of the two name lists one entry at a time (kills side
-  // preferred when tied in length, since it's the primary stat) until it
-  // fits, appending "+N more" to whichever list got trimmed.
-  let kNames = [...killNames];
-  let dNames = [...deathNames];
-  while (message.length > maxLength && (kNames.length > 1 || dNames.length > 1)) {
-    if (kNames.length >= dNames.length && kNames.length > 1) {
-      kNames.pop();
-    } else if (dNames.length > 1) {
-      dNames.pop();
-    } else {
-      break;
-    }
-    const kDisplay = kNames.length < killNames.length ? [...kNames, `+${killNames.length - kNames.length} more`] : kNames;
-    const dDisplay = dNames.length < deathNames.length ? [...dNames, `+${deathNames.length - dNames.length} more`] : dNames;
-    message = render(kDisplay, dDisplay);
+  // Phase 1: trim tied-name lists, one name at a time from whichever line
+  // currently shows the most names, until it fits or every line is down to 1.
+  while (message.length > maxLength) {
+    let idx = -1;
+    let maxNames = 1;
+    keepCounts.forEach((count, i) => {
+      if (count > maxNames) {
+        maxNames = count;
+        idx = i;
+      }
+    });
+    if (idx === -1) break;
+    keepCounts[idx] -= 1;
+    message = render(activeSpecs, keepCounts);
+  }
+
+  // Phase 2: still too long even at 1 name per line - drop whole lines from
+  // the bottom (lowest priority) up, never touching header/signature.
+  while (message.length > maxLength && activeSpecs.length > 0) {
+    activeSpecs = activeSpecs.slice(0, -1);
+    keepCounts = keepCounts.slice(0, -1);
+    message = render(activeSpecs, keepCounts);
   }
 
   if (message.length > maxLength) {
-    // Pathological edge case (even fully trimmed it doesn't fit): hard truncate.
+    // Pathological: even header+signature alone don't fit. Hard truncate.
     message = message.slice(0, maxLength);
   }
 

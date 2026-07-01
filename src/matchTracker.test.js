@@ -161,3 +161,62 @@ test('surviving a simulated restart: reopening the db resumes tracking the same 
 
   db.close();
 });
+
+test('combat score and defense score accumulate as deltas just like kills/deaths', () => {
+  const db = openDb(':memory:');
+  const tracker = new MatchTracker(db);
+
+  tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 0, deaths: 0, combatScore: 100, defenseScore: 50 }],
+    makeGameState('Carentan', 1800)
+  );
+  const second = tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 3, deaths: 1, combatScore: 450, defenseScore: 380 }],
+    makeGameState('Carentan', 1770)
+  );
+
+  const deltas = db.getMatchDeltas(second.currentMatchEpoch);
+  assert.equal(deltas[0].combatScore, 350); // 450 - 100
+  assert.equal(deltas[0].defenseScore, 330); // 380 - 50
+
+  db.close();
+});
+
+test('isVip is captured as a live snapshot (not a baseline) and reflects the latest poll', () => {
+  const db = openDb(':memory:');
+  const tracker = new MatchTracker(db);
+
+  tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 0, deaths: 0, isVip: false }],
+    makeGameState('Carentan', 1800)
+  );
+  let deltas = db.getMatchDeltas(db.getCurrentMatchEpoch());
+  assert.equal(deltas[0].isVip, false);
+
+  // Player gains VIP mid-match (e.g. the bot granted it, or an admin did) -
+  // isVip should flip to true on the very next poll, unlike kills/deaths
+  // which track a delta from baseline.
+  tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 1, deaths: 0, isVip: true }],
+    makeGameState('Carentan', 1770)
+  );
+  deltas = db.getMatchDeltas(db.getCurrentMatchEpoch());
+  assert.equal(deltas[0].isVip, true);
+
+  db.close();
+});
+
+test('combat/defense score default to 0 when omitted from the API response', () => {
+  const db = openDb(':memory:');
+  const tracker = new MatchTracker(db);
+
+  const result = tracker.processPoll(
+    [{ playerId: 'p1', playerName: 'Alice', kills: 1, deaths: 0 }], // no combatScore/defenseScore fields
+    makeGameState('Carentan', 1800)
+  );
+  const deltas = db.getMatchDeltas(result.currentMatchEpoch);
+  assert.equal(deltas[0].combatScore, 0);
+  assert.equal(deltas[0].defenseScore, 0);
+
+  db.close();
+});

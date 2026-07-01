@@ -1,10 +1,11 @@
-import { findTiedLeaders, formatMurderMachineMessage } from './leaderboard.js';
+import { findTiedLeaders, formatStatsMessage } from './leaderboard.js';
 
 /**
- * Announces the current (in-progress) match's kill leader(s) ("Murder
- * Machine") and death leader(s) ("Wooden Spoon") in-game, in one combined
- * message. No-ops quietly if there's no current match or nobody has any
- * kills/deaths recorded yet.
+ * Announces the current (in-progress) match's leaders across all four
+ * tracked categories - Killing Machine (kills), Having a day (deaths),
+ * Rambo (combat score), Brick wall (defense score) - in one combined
+ * message, signed "-BigChazzza Bot". No-ops quietly if there's no current
+ * match or nobody has any stats recorded yet.
  */
 export async function announceCurrentLeaders({ db, bifrost }) {
   const currentMatchEpoch = db.getCurrentMatchEpoch();
@@ -16,10 +17,12 @@ export async function announceCurrentLeaders({ db, bifrost }) {
   const deltas = db.getMatchDeltas(currentMatchEpoch);
   const killLeaders = findTiedLeaders(deltas, 'kills');
   const deathLeaders = findTiedLeaders(deltas, 'deaths');
+  const combatLeaders = findTiedLeaders(deltas, 'combatScore');
+  const defenseLeaders = findTiedLeaders(deltas, 'defenseScore');
 
-  const message = formatMurderMachineMessage(killLeaders, deathLeaders);
+  const message = formatStatsMessage({ killLeaders, deathLeaders, combatLeaders, defenseLeaders });
   if (!message) {
-    console.log('[announce] no kills or deaths recorded yet this match, skipping announcement');
+    console.log('[announce] no stats recorded yet this match, skipping announcement');
     return;
   }
 

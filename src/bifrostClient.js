@@ -1,6 +1,14 @@
 const OAUTH_URL = 'https://api.dev.bifrostgaming.com/v1/oauth/token';
 const GRAPHQL_URL = 'https://api.dev.bifrostgaming.com/v1/graphql';
 
+// Bifrost caps guildSendMessageToAll at 200 characters post-trim. Callers
+// (leaderboard.js formatters) are expected to format their own complete
+// message - including the "-BigChazzza Bot" sign-off - against this budget
+// so the smart per-line/per-name truncation happens in one place. The
+// hard-truncate in sendMessageToAll below is only a safety net for callers
+// that don't.
+export const MESSAGE_CONTENT_BUDGET = 200;
+
 // Refresh the token this many ms before it actually expires, so we never
 // race a 401 mid-request. Well within the 30-min token-endpoint rate limit
 // since a 1hr token only gets refreshed roughly once an hour.
@@ -122,6 +130,8 @@ export class BifrostClient {
             kills
             deaths
             teamkills
+            combatScore
+            defenseScore
           }
         }
       }
@@ -187,8 +197,17 @@ export class BifrostClient {
     return data?.guildRemoveVip ?? null;
   }
 
-  /** guildSendMessageToAll — rate limit 12 req / min per server, 200 char cap */
+  /**
+   * guildSendMessageToAll — rate limit 12 req / min per server, 200 char cap.
+   * Callers build their own complete message (including the "-BigChazzza
+   * Bot" sign-off, via leaderboard.js's formatStatsMessage) already sized
+   * against MESSAGE_CONTENT_BUDGET; the trim here is only a last-resort
+   * safety net.
+   */
   async sendMessageToAll(message) {
+    const trimmedMessage =
+      message.length > MESSAGE_CONTENT_BUDGET ? message.slice(0, MESSAGE_CONTENT_BUDGET) : message;
+
     const query = `
       mutation SendMessageToAll($input: GuildSendMessageToAllInput!) {
         guildSendMessageToAll(input: $input) {
@@ -201,7 +220,7 @@ export class BifrostClient {
       }
     `;
     const data = await this._graphqlRequest(query, {
-      input: { serverId: this.serverId, message },
+      input: { serverId: this.serverId, message: trimmedMessage },
     });
     return data?.guildSendMessageToAll ?? null;
   }

@@ -2,35 +2,56 @@
 
 A background bot for The Rogue Regiment's Hell Let Loose server. Polls the
 [Bifrost Gaming API](https://developer.bifrostgaming.com) every 30 seconds to
-track live kills and deaths, announces the current kill leader ("Murder
-Machine") and death leader ("Wooden Spoon") in-game every 15 minutes, and
-automatically awards 7-day VIP at the end of each match to the player(s)
-with the most kills and the player(s) with the most deaths.
+track kills, deaths, combat score, and defense score, announces the current
+leader in each category in-game every 15 minutes, and automatically awards
+7-day VIP at the end of each match to the winner(s) of each category.
 
 ## How it works
 
 - **Polling (every 30s):** calls `guildGetPlayers` and `guildGetGameState`.
-  Kills/deaths are tracked as **deltas from a per-match baseline**, so it
-  works correctly whether the API's raw numbers are per-match or
-  session-cumulative.
+  Kills/deaths/combat score/defense score are all tracked as **deltas from
+  a per-match baseline**, so it works correctly whether the API's raw
+  numbers are per-match or session-cumulative.
 - **Match detection:** since Bifrost has no match-start/end webhook, a new
   match is detected when the reported map name changes, or when the match
   clock's time-remaining jumps up significantly (a fresh match starting).
-- **Announcements (every 15 min):** posts a single combined message via
-  `guildSendMessageToAll`, e.g.:
-  `Murder Machine - Alice has the most kills with 22. Wooden Spoon - Bob has the most deaths with 15`.
-  Ties on either stat are listed with "have" instead of "has"
-  (`Murder Machine - Alice, Carl have the most kills with 10...`). Respects
-  the 200-character limit, trimming name lists with "+N more" if needed.
+- **Announcements (every 15 min):** posts one combined message via
+  `guildSendMessageToAll` covering all four categories, e.g.:
+  ```
+  Killing Machine - Alice (22) Kills
+  Having a day - Bob (15) Deaths
+  Rambo - Carl (450)
+  Brick wall - Dave (380)
+
+  -BigChazzza Bot
+  ```
+  A category is omitted entirely if nobody has a nonzero value yet. Ties
+  are listed as comma-separated names. If the message would exceed
+  Bifrost's 200-character cap, tied-name lists are trimmed with "+N more"
+  first, then (if still too long) whole categories are dropped starting
+  with the lowest-priority one (Brick wall, then Rambo) — the header and
+  signature are never touched.
 - **VIP awards (at match end only):** grants VIP via `guildAddVip` to every
-  player tied for most kills, and separately to every player tied for most
-  deaths, for that match. Bifrost's `guildAddVip` has no duration parameter,
-  so this bot tracks its own 7-day expiry in SQLite and calls
-  `guildRemoveVip` itself once expired (checked hourly).
+  player tied for the top spot in each of the four categories, then sends a
+  "Congratulations!" announcement in the same format. Bifrost's
+  `guildAddVip` has no duration parameter, so this bot tracks its own 7-day
+  expiry in SQLite and calls `guildRemoveVip` itself once expired (checked
+  hourly).
+- **Pre-existing VIP is never touched:** if a player already has VIP before
+  the bot ever grants them anything (e.g. an existing TRR clan member),
+  they're still announced and "awarded" normally, but the bot permanently
+  flags them as pre-existing and will **never** call `guildRemoveVip` for
+  them. This check happens once per player, the first time they're ever
+  considered for an award — a player the bot itself granted VIP to (who
+  then shows `isVip: true` on later polls) is correctly recognised as
+  bot-managed, not re-flagged as pre-existing, so their 7-day clock still
+  expires and revokes normally on repeat wins.
 - **Persistence:** all match/leaderboard/VIP state lives in a SQLite file
   (via Node's built-in [`node:sqlite`](https://nodejs.org/api/sqlite.html)
   module — no native dependency to compile) so the bot can restart mid-match
-  without losing progress.
+  without losing progress. Schema migrations (new columns, dropping an
+  outgrown `CHECK` constraint) run automatically and idempotently on every
+  startup, so upgrading an already-deployed database is safe.
 
 ## Requirements
 
@@ -95,3 +116,18 @@ by analogy (same pattern, `playerName` dropped) since no live error has been
 seen for it yet — if the hourly VIP-expiry sweep ever logs a `guildRemoveVip`
 failure, check Render logs for the exact validation error and adjust
 `removeVip()` in `src/bifrostClient.js` accordingly.
+
+## Unverified: multi-line message rendering in-game
+
+The 15-minute and match-end announcements are built with embedded `\n`
+newlines (see the example in "How it works" above). This has been verified
+to survive intact through JSON serialization and the GraphQL request body
+sent to Bifrost, but **whether Hell Let Loose's in-game chat actually
+renders literal newlines as separate lines, or collapses/strips them into
+one line, has not been confirmed against the live game client.** If
+messages appear as one long run-on line in-game instead of four separate
+lines, that's a Bifrost/game-client rendering behavior, not a bug in this
+bot's message construction — the fix would be changing the separator in
+`formatStatsMessage()` (`src/leaderboard.js`) to something the game does
+render as a line break (e.g. a different delimiter), not changing how the
+data is sent.

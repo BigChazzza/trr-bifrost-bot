@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findTiedLeaders, formatLeaderMessage, formatMurderMachineMessage } from './leaderboard.js';
+import { findTiedLeaders, formatStatsMessage } from './leaderboard.js';
 
 test('findTiedLeaders returns single leader when one player has the max', () => {
   const deltas = [
@@ -36,100 +36,140 @@ test('findTiedLeaders returns empty array for empty input', () => {
   assert.deepEqual(findTiedLeaders(null, 'kills'), []);
 });
 
-test('formatLeaderMessage formats a single leader', () => {
-  const msg = formatLeaderMessage([{ playerName: 'Alice' }], 'kills', 42);
-  assert.equal(msg, 'Leader: Alice (42 kills)');
-  assert.ok(msg.length <= 200);
+test('findTiedLeaders works for combatScore/defenseScore stat keys too', () => {
+  const deltas = [
+    { playerId: '1', playerName: 'Alice', combatScore: 450, defenseScore: 100 },
+    { playerId: '2', playerName: 'Bob', combatScore: 200, defenseScore: 380 },
+  ];
+  assert.deepEqual(findTiedLeaders(deltas, 'combatScore').map((l) => l.playerName), ['Alice']);
+  assert.deepEqual(findTiedLeaders(deltas, 'defenseScore').map((l) => l.playerName), ['Bob']);
 });
 
-test('formatLeaderMessage formats multiple tied leaders', () => {
-  const msg = formatLeaderMessage(
-    [{ playerName: 'Alice' }, { playerName: 'Bob' }],
-    'kills',
+test('formatStatsMessage renders all four categories in priority order with the signature', () => {
+  const msg = formatStatsMessage({
+    killLeaders: [{ playerName: 'Alice', kills: 22 }],
+    deathLeaders: [{ playerName: 'Bob', deaths: 15 }],
+    combatLeaders: [{ playerName: 'Carl', combatScore: 450 }],
+    defenseLeaders: [{ playerName: 'Dave', defenseScore: 380 }],
+  });
+  assert.equal(
+    msg,
+    'Killing Machine - Alice (22) Kills\n' +
+      'Having a day - Bob (15) Deaths\n' +
+      'Rambo - Carl (450)\n' +
+      'Brick wall - Dave (380)\n' +
+      '\n' +
+      '-BigChazzza Bot'
+  );
+});
+
+test('formatStatsMessage joins tied names with commas', () => {
+  const msg = formatStatsMessage({
+    killLeaders: [{ playerName: 'Alice', kills: 10 }, { playerName: 'Eve', kills: 10 }],
+    deathLeaders: [],
+    combatLeaders: [],
+    defenseLeaders: [],
+  });
+  assert.equal(msg, 'Killing Machine - Alice, Eve (10) Kills\n\n-BigChazzza Bot');
+});
+
+test('formatStatsMessage omits categories with no leaders', () => {
+  const msg = formatStatsMessage({
+    killLeaders: [{ playerName: 'Alice', kills: 5 }],
+    deathLeaders: [],
+    combatLeaders: [],
+    defenseLeaders: [{ playerName: 'Dave', defenseScore: 100 }],
+  });
+  assert.equal(msg, 'Killing Machine - Alice (5) Kills\nBrick wall - Dave (100)\n\n-BigChazzza Bot');
+});
+
+test('formatStatsMessage returns null when there is nothing to report and no header', () => {
+  const msg = formatStatsMessage({ killLeaders: [], deathLeaders: [], combatLeaders: [], defenseLeaders: [] });
+  assert.equal(msg, null);
+});
+
+test('formatStatsMessage includes a header line when provided, even with no category leaders', () => {
+  const msg = formatStatsMessage({
+    header: 'Congratulations! You’ve won yourselves 7-day VIP!',
+    killLeaders: [],
+    deathLeaders: [],
+    combatLeaders: [],
+    defenseLeaders: [],
+  });
+  assert.equal(msg, 'Congratulations! You’ve won yourselves 7-day VIP!\n\n-BigChazzza Bot');
+});
+
+test('formatStatsMessage puts the header before the stat lines', () => {
+  const msg = formatStatsMessage({
+    header: 'Congratulations!',
+    killLeaders: [{ playerName: 'Alice', kills: 22 }],
+    deathLeaders: [],
+    combatLeaders: [],
+    defenseLeaders: [],
+  });
+  assert.equal(msg, 'Congratulations!\nKilling Machine - Alice (22) Kills\n\n-BigChazzza Bot');
+});
+
+test('formatStatsMessage respects a custom signature', () => {
+  const msg = formatStatsMessage(
+    { killLeaders: [{ playerName: 'Alice', kills: 5 }], deathLeaders: [], combatLeaders: [], defenseLeaders: [] },
+    200,
+    '-Custom Sig'
+  );
+  assert.match(msg, /-Custom Sig$/);
+});
+
+test('formatStatsMessage supports omitting the signature entirely', () => {
+  const msg = formatStatsMessage(
+    { killLeaders: [{ playerName: 'Alice', kills: 5 }], deathLeaders: [], combatLeaders: [], defenseLeaders: [] },
+    200,
+    ''
+  );
+  assert.equal(msg, 'Killing Machine - Alice (5) Kills');
+});
+
+test('formatStatsMessage trims tied-name lists (longest first) before dropping whole lines', () => {
+  const manyKillers = Array.from({ length: 30 }, (_, i) => ({ playerName: `Killer${i}`, kills: 5 }));
+  const msg = formatStatsMessage({
+    killLeaders: manyKillers,
+    deathLeaders: [{ playerName: 'Bob', deaths: 3 }],
+    combatLeaders: [{ playerName: 'Carl', combatScore: 450 }],
+    defenseLeaders: [{ playerName: 'Dave', defenseScore: 380 }],
+  });
+  assert.ok(msg.length <= 200, `expected <= 200 chars, got ${msg.length}`);
+  assert.match(msg, /\+\d+ more/);
+  // Lower-priority lines should survive as long as possible while the long
+  // tied-name list gets trimmed first.
+  assert.match(msg, /Having a day/);
+  assert.match(msg, /Rambo/);
+  assert.match(msg, /Brick wall/);
+  assert.match(msg, /-BigChazzza Bot/);
+});
+
+test('formatStatsMessage drops the lowest-priority line(s) if trimming names alone is not enough', () => {
+  // Every category has one very long tied-name list, forcing line-dropping
+  // (Brick wall first, since it's lowest priority) once every line is down
+  // to a single name each and it's still too long.
+  const longNames = (prefix, count) => Array.from({ length: count }, (_, i) => `${prefix}${'X'.repeat(20)}${i}`);
+  const mk = (names, key) => names.map((n) => ({ playerName: n, [key]: 1 }));
+
+  const msg = formatStatsMessage(
+    {
+      killLeaders: mk(longNames('K', 1), 'kills'),
+      deathLeaders: mk(longNames('D', 1), 'deaths'),
+      combatLeaders: mk(longNames('C', 1), 'combatScore'),
+      defenseLeaders: mk(longNames('F', 1), 'defenseScore'),
+    },
+    90 // tight budget forces line-dropping even at 1 name per line
+  );
+  assert.ok(msg.length <= 90, `expected <= 90 chars, got ${msg.length}`);
+  assert.doesNotMatch(msg, /Brick wall/, 'lowest-priority line should be dropped first');
+});
+
+test('formatStatsMessage hard-truncates as a last resort if nothing else fits', () => {
+  const msg = formatStatsMessage(
+    { killLeaders: [{ playerName: 'Alice', kills: 5 }], deathLeaders: [], combatLeaders: [], defenseLeaders: [] },
     10
   );
-  assert.equal(msg, 'Tied leaders: Alice, Bob (10 kills)');
-});
-
-test('formatLeaderMessage returns null for empty leaders list', () => {
-  assert.equal(formatLeaderMessage([], 'kills', 0), null);
-});
-
-test('formatLeaderMessage truncates a very long tied-name list to fit 200 chars', () => {
-  const leaders = Array.from({ length: 60 }, (_, i) => ({
-    playerName: `PlayerWithAVeryLongNameNumber${i}`,
-  }));
-  const msg = formatLeaderMessage(leaders, 'kills', 5);
-  assert.ok(msg.length <= 200, `expected <= 200 chars, got ${msg.length}`);
-  assert.match(msg, /\+\d+ more/);
-});
-
-test('formatLeaderMessage respects a custom maxLength', () => {
-  const leaders = [{ playerName: 'Alice' }, { playerName: 'Bob' }, { playerName: 'Carl' }];
-  const msg = formatLeaderMessage(leaders, 'kills', 5, 30);
-  assert.ok(msg.length <= 30, `expected <= 30 chars, got ${msg.length}: "${msg}"`);
-});
-
-test('formatMurderMachineMessage combines a single kill leader and single death leader', () => {
-  const msg = formatMurderMachineMessage(
-    [{ playerName: 'Alice', kills: 22 }],
-    [{ playerName: 'Bob', deaths: 15 }]
-  );
-  assert.equal(msg, 'Murder Machine - Alice has the most kills with 22. Wooden Spoon - Bob has the most deaths with 15');
-});
-
-test('formatMurderMachineMessage handles tied kill leaders with "have"', () => {
-  const msg = formatMurderMachineMessage(
-    [{ playerName: 'Alice', kills: 10 }, { playerName: 'Carl', kills: 10 }],
-    [{ playerName: 'Bob', deaths: 15 }]
-  );
-  assert.equal(
-    msg,
-    'Murder Machine - Alice, Carl have the most kills with 10. Wooden Spoon - Bob has the most deaths with 15'
-  );
-});
-
-test('formatMurderMachineMessage handles tied death leaders with "have"', () => {
-  const msg = formatMurderMachineMessage(
-    [{ playerName: 'Alice', kills: 22 }],
-    [{ playerName: 'Bob', deaths: 8 }, { playerName: 'Dave', deaths: 8 }]
-  );
-  assert.equal(
-    msg,
-    'Murder Machine - Alice has the most kills with 22. Wooden Spoon - Bob, Dave have the most deaths with 8'
-  );
-});
-
-test('formatMurderMachineMessage omits the kills side if there are no kill leaders yet', () => {
-  const msg = formatMurderMachineMessage([], [{ playerName: 'Bob', deaths: 3 }]);
-  assert.equal(msg, 'Wooden Spoon - Bob has the most deaths with 3');
-});
-
-test('formatMurderMachineMessage omits the deaths side if there are no death leaders yet', () => {
-  const msg = formatMurderMachineMessage([{ playerName: 'Alice', kills: 5 }], []);
-  assert.equal(msg, 'Murder Machine - Alice has the most kills with 5');
-});
-
-test('formatMurderMachineMessage returns null when there is nothing to announce', () => {
-  assert.equal(formatMurderMachineMessage([], []), null);
-});
-
-test('formatMurderMachineMessage truncates long tied-name lists to stay within 200 chars', () => {
-  const killLeaders = Array.from({ length: 40 }, (_, i) => ({ playerName: `KillerNameNumber${i}`, kills: 5 }));
-  const deathLeaders = Array.from({ length: 40 }, (_, i) => ({ playerName: `DierNameNumber${i}`, deaths: 3 }));
-  const msg = formatMurderMachineMessage(killLeaders, deathLeaders);
-  assert.ok(msg.length <= 200, `expected <= 200 chars, got ${msg.length}`);
-  assert.match(msg, /\+\d+ more/);
-  // Both sides should still be represented even after truncation.
-  assert.match(msg, /Murder Machine/);
-  assert.match(msg, /Wooden Spoon/);
-});
-
-test('formatMurderMachineMessage respects a custom maxLength', () => {
-  const msg = formatMurderMachineMessage(
-    [{ playerName: 'Alice', kills: 22 }],
-    [{ playerName: 'Bob', deaths: 15 }],
-    40
-  );
-  assert.ok(msg.length <= 40, `expected <= 40 chars, got ${msg.length}: "${msg}"`);
+  assert.ok(msg.length <= 10, `expected <= 10 chars, got ${msg.length}: "${msg}"`);
 });
