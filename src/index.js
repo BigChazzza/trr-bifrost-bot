@@ -7,7 +7,7 @@ import { announceCurrentLeaders } from './announcer.js';
 import { getMilestonesToNotify } from './killMilestones.js';
 
 const POLL_INTERVAL_MS = 30 * 1000;
-const ANNOUNCE_INTERVAL_MS = 15 * 60 * 1000;
+const ANNOUNCE_INTERVAL_MS = 30 * 60 * 1000;
 const VIP_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
 // When the server is empty (0 players), slow the effective poll rate to
