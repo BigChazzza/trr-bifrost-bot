@@ -5,7 +5,7 @@ const SIGNATURE = '\n\n-BigChazzza Bot';
 export const KILL_MILESTONES = [
   {
     kills: 30,
-    message: `Woah! 30! Saves some kills for the rest of us!${SIGNATURE}`,
+    message: `30?! AYOOO! We've got a killer on our hands!${SIGNATURE}`,
   },
   {
     kills: 40,
