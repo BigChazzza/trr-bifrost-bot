@@ -4,14 +4,6 @@ const SIGNATURE = '\n\n-BigChazzza Bot';
 // Thresholds must be in ascending order.
 export const KILL_MILESTONES = [
   {
-    kills: 10,
-    message: `Ok ok… 10 kills! - we're cooking! - Let’s go!${SIGNATURE}`,
-  },
-  {
-    kills: 20,
-    message: `20?! AYOOO! We’ve got a killer on our hands!${SIGNATURE}`,
-  },
-  {
     kills: 30,
     message: `Woah! 30! Saves some kills for the rest of us!${SIGNATURE}`,
   },
@@ -29,7 +21,7 @@ export const KILL_MILESTONES = [
   },
   {
     kills: 70,
-    message: `70 kills?!? - Ring ring, it’s TACO on the phone…${SIGNATURE}`,
+    message: `70 kills?!? - Ring ring, it’s TRR recruitment on the phone…${SIGNATURE}`,
   },
   {
     kills: 80,

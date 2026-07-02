@@ -4,37 +4,38 @@ import { getMilestonesToNotify, KILL_MILESTONES } from './killMilestones.js';
 
 test('getMilestonesToNotify returns nothing when no milestone has been crossed', () => {
   assert.deepEqual(getMilestonesToNotify(0, 5), []);
-  assert.deepEqual(getMilestonesToNotify(10, 15), []);
+  assert.deepEqual(getMilestonesToNotify(0, 29), []);
+  assert.deepEqual(getMilestonesToNotify(30, 35), []);
 });
 
-test('getMilestonesToNotify returns the first milestone when player just crosses 10', () => {
-  const result = getMilestonesToNotify(0, 10);
-  assert.equal(result.length, 1);
-  assert.equal(result[0].kills, 10);
-});
-
-test('getMilestonesToNotify returns multiple milestones when player jumps across several in one poll', () => {
-  const result = getMilestonesToNotify(0, 22);
-  assert.equal(result.length, 2);
-  assert.equal(result[0].kills, 10);
-  assert.equal(result[1].kills, 20);
-});
-
-test('getMilestonesToNotify does not re-fire already-notified milestones', () => {
-  const result = getMilestonesToNotify(20, 25);
-  assert.deepEqual(result, []);
-});
-
-test('getMilestonesToNotify fires exactly the next milestone on a clean step-up', () => {
-  const result = getMilestonesToNotify(20, 31);
+test('getMilestonesToNotify returns the first milestone when player just crosses 30', () => {
+  const result = getMilestonesToNotify(0, 30);
   assert.equal(result.length, 1);
   assert.equal(result[0].kills, 30);
 });
 
-test('getMilestonesToNotify fires all 10 milestones when starting from 0 and crossing 100', () => {
+test('getMilestonesToNotify returns multiple milestones when player jumps across several in one poll', () => {
+  const result = getMilestonesToNotify(0, 42);
+  assert.equal(result.length, 2);
+  assert.equal(result[0].kills, 30);
+  assert.equal(result[1].kills, 40);
+});
+
+test('getMilestonesToNotify does not re-fire already-notified milestones', () => {
+  const result = getMilestonesToNotify(30, 35);
+  assert.deepEqual(result, []);
+});
+
+test('getMilestonesToNotify fires exactly the next milestone on a clean step-up', () => {
+  const result = getMilestonesToNotify(30, 41);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].kills, 40);
+});
+
+test('getMilestonesToNotify fires all 8 milestones when starting from 0 and crossing 100', () => {
   const result = getMilestonesToNotify(0, 100);
-  assert.equal(result.length, 10);
-  assert.equal(result[0].kills, 10);
+  assert.equal(result.length, 8);
+  assert.equal(result[0].kills, 30);
   assert.equal(result[result.length - 1].kills, 100);
 });
 
