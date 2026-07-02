@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS player_match_stats (
   baseline_defense_score INTEGER NOT NULL DEFAULT 0,
   last_combat_score INTEGER NOT NULL DEFAULT 0,
   last_defense_score INTEGER NOT NULL DEFAULT 0,
+  notified_kill_milestone INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (match_epoch, player_id)
 );
 
@@ -143,6 +144,7 @@ export function openDb(dbPath) {
   addColumnIfMissing(db, 'player_match_stats', 'baseline_defense_score INTEGER NOT NULL DEFAULT 0', 'baseline_defense_score');
   addColumnIfMissing(db, 'player_match_stats', 'last_combat_score INTEGER NOT NULL DEFAULT 0', 'last_combat_score');
   addColumnIfMissing(db, 'player_match_stats', 'last_defense_score INTEGER NOT NULL DEFAULT 0', 'last_defense_score');
+  addColumnIfMissing(db, 'player_match_stats', 'notified_kill_milestone INTEGER NOT NULL DEFAULT 0', 'notified_kill_milestone');
   addColumnIfMissing(db, 'vip_grants', 'preexisting INTEGER NOT NULL DEFAULT 0', 'preexisting');
   dropVipGrantsReasonCheckIfPresent(db);
 
@@ -192,6 +194,15 @@ export function openDb(dbPath) {
     ),
     markVipStatusRevoked: db.prepare(
       'UPDATE vip_status SET revoked = 1, updated_at = ? WHERE player_id = ?'
+    ),
+    getNotifiedMilestone: db.prepare(
+      'SELECT notified_kill_milestone FROM player_match_stats WHERE match_epoch = ? AND player_id = ?'
+    ),
+    setNotifiedMilestone: db.prepare(
+      'UPDATE player_match_stats SET notified_kill_milestone = ? WHERE match_epoch = ? AND player_id = ?'
+    ),
+    getPlayersForMilestoneCheck: db.prepare(
+      'SELECT player_id, player_name, notified_kill_milestone, (last_kills - baseline_kills) AS kills FROM player_match_stats WHERE match_epoch = ?'
     ),
   };
 
@@ -317,6 +328,26 @@ export function openDb(dbPath) {
 
     markVipStatusRevoked(playerId) {
       stmts.markVipStatusRevoked.run(new Date().toISOString(), playerId);
+    },
+
+    /**
+     * Returns all players in the current match with their kill delta and
+     * the highest kill milestone already notified for them. Used by the
+     * kill-milestone check after each poll.
+     * Returns [{playerId, playerName, kills, notifiedKillMilestone}]
+     */
+    getPlayersForMilestoneCheck(matchEpoch) {
+      return stmts.getPlayersForMilestoneCheck.all(matchEpoch).map((row) => ({
+        playerId: row.player_id,
+        playerName: row.player_name,
+        kills: row.kills,
+        notifiedKillMilestone: row.notified_kill_milestone,
+      }));
+    },
+
+    /** Updates the highest kill milestone sent for a player in a match. */
+    setNotifiedMilestone(matchEpoch, playerId, milestone) {
+      stmts.setNotifiedMilestone.run(milestone, matchEpoch, playerId);
     },
   };
 }

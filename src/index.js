@@ -4,6 +4,7 @@ import { openDb } from './db.js';
 import { MatchTracker } from './matchTracker.js';
 import { awardMatchEndVIPs, sweepExpiredVips } from './vipAwarder.js';
 import { announceCurrentLeaders } from './announcer.js';
+import { getMilestonesToNotify } from './killMilestones.js';
 
 const POLL_INTERVAL_MS = 30 * 1000;
 const ANNOUNCE_INTERVAL_MS = 15 * 60 * 1000;
@@ -103,6 +104,8 @@ async function main() {
       if (transitioned && endedMatchEpoch !== null) {
         await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch });
       }
+
+      await checkKillMilestones(currentMatchEpoch);
     } catch (err) {
       console.error('[poll] unexpected error, will retry next tick:', err);
     } finally {
@@ -120,6 +123,30 @@ async function main() {
       await announceCurrentLeaders({ db, bifrost });
     } catch (err) {
       console.error('[announce] unexpected error:', err);
+    }
+  }
+
+  async function checkKillMilestones(matchEpoch) {
+    try {
+      const players = db.getPlayersForMilestoneCheck(matchEpoch);
+      for (const player of players) {
+        const milestones = getMilestonesToNotify(player.notifiedKillMilestone, player.kills);
+        if (!milestones.length) continue;
+
+        for (const milestone of milestones) {
+          const result = await bifrost.messagePlayer(player.playerId, milestone.message);
+          if (result?.success) {
+            console.log(`[milestones] sent ${milestone.kills}-kill message to ${player.playerName}`);
+          } else {
+            console.error(`[milestones] failed to message ${player.playerName} for ${milestone.kills} kills:`, JSON.stringify(result));
+          }
+        }
+
+        const highest = milestones[milestones.length - 1].kills;
+        db.setNotifiedMilestone(matchEpoch, player.playerId, highest);
+      }
+    } catch (err) {
+      console.error('[milestones] unexpected error:', err);
     }
   }
 
