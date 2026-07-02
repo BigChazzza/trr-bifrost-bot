@@ -9,6 +9,12 @@ const POLL_INTERVAL_MS = 30 * 1000;
 const ANNOUNCE_INTERVAL_MS = 15 * 60 * 1000;
 const VIP_SWEEP_INTERVAL_MS = 60 * 60 * 1000;
 
+// When the server is empty (0 players), slow the effective poll rate to
+// this interval by skipping most 30s ticks. Normal polling and
+// announcements resume automatically once player count hits the threshold.
+const EMPTY_SERVER_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const ANNOUNCE_RESUME_PLAYER_THRESHOLD = 5;
+
 function requireEnv(name) {
   const value = process.env[name];
   if (!value) {
@@ -40,6 +46,11 @@ async function main() {
   const matchTracker = new MatchTracker(db);
 
   let pollInFlight = false;
+  // Tracks the player count from the last successful poll. null = not yet
+  // polled. Used to throttle polling when the server is empty and to
+  // suppress announcements when below the resume threshold.
+  let lastKnownPlayerCount = null;
+  let lastActualPollTime = 0; // epoch ms of the last time we made real API calls
 
   async function poll() {
     if (pollInFlight) {
@@ -48,8 +59,19 @@ async function main() {
       console.warn('[poll] previous poll still in flight, skipping this tick');
       return;
     }
+
+    // When the server is empty, throttle to 5-minute effective intervals
+    // by skipping most 30s ticks. We still let the very first poll through
+    // (lastKnownPlayerCount === null) and resume normal rate the moment
+    // any player joins (lastKnownPlayerCount > 0).
+    if (lastKnownPlayerCount === 0 && Date.now() - lastActualPollTime < EMPTY_SERVER_POLL_INTERVAL_MS) {
+      return;
+    }
+
     pollInFlight = true;
     try {
+      lastActualPollTime = Date.now();
+
       const [playersResult, gameState] = await Promise.all([
         bifrost.getPlayers(),
         bifrost.getGameState(),
@@ -60,12 +82,21 @@ async function main() {
         return;
       }
 
+      const playerCount = playersResult.totalCount ?? (playersResult.players ?? []).length;
+      const wasEmpty = lastKnownPlayerCount === 0;
+      lastKnownPlayerCount = playerCount;
+
+      if (playerCount === 0 && !wasEmpty) {
+        console.log('[poll] server is now empty - switching to 5-minute poll interval');
+      } else if (playerCount > 0 && wasEmpty) {
+        console.log(`[poll] server has players again (${playerCount}) - resuming 30-second poll interval`);
+      }
+
       const { transitioned, endedMatchEpoch, currentMatchEpoch, mapName } =
         matchTracker.processPoll(playersResult.players ?? [], gameState);
 
       console.log(
-        `[poll] ${playersResult.totalCount ?? (playersResult.players ?? []).length} players, ` +
-          `map=${mapName ?? 'unknown'}, matchEpoch=${currentMatchEpoch}` +
+        `[poll] ${playerCount} players, map=${mapName ?? 'unknown'}, matchEpoch=${currentMatchEpoch}` +
           (transitioned ? ` (transitioned from match ${endedMatchEpoch})` : '')
       );
 
@@ -80,6 +111,11 @@ async function main() {
   }
 
   async function announce() {
+    // Suppress announcements until the server has enough players to make
+    // them meaningful. Also covers the empty-server throttle case.
+    if (lastKnownPlayerCount !== null && lastKnownPlayerCount < ANNOUNCE_RESUME_PLAYER_THRESHOLD) {
+      return;
+    }
     try {
       await announceCurrentLeaders({ db, bifrost });
     } catch (err) {
