@@ -197,21 +197,21 @@ export class BifrostClient {
     return data?.guildRemoveVip ?? null;
   }
 
-  /** guildMessagePlayer — rate limit 150 req / 5min per server. Sends a direct chat message to a single player by their playerId. */
+  /**
+   * guildMessagePlayer — rate limit 150 req / 5min per server.
+   * NOTE: same flat-args vs input-wrapper mismatch as guildAddVip — live schema
+   * requires `input: GuildMessagePlayerInput!`, not bare serverId/playerId/etc.
+   */
   async messagePlayer(playerId, message) {
     const query = `
-      mutation MessagePlayer($serverId: ID!, $playerId: String!, $message: String!, $gameType: String) {
-        guildMessagePlayer(serverId: $serverId, playerId: $playerId, message: $message, gameType: $gameType) {
+      mutation MessagePlayer($input: GuildMessagePlayerInput!) {
+        guildMessagePlayer(input: $input) {
           success
-          message
         }
       }
     `;
     const data = await this._graphqlRequest(query, {
-      serverId: this.serverId,
-      playerId,
-      message,
-      gameType: this.gameType,
+      input: { serverId: this.serverId, playerId, message, gameType: this.gameType },
     });
     return data?.guildMessagePlayer ?? null;
   }
