@@ -134,7 +134,7 @@ async function main() {
         if (!milestones.length) continue;
 
         for (const milestone of milestones) {
-          const result = await bifrost.messagePlayer(player.playerId, milestone.message);
+          const result = await bifrost.messagePlayer(player.playerId, player.playerName, milestone.message);
           if (result?.success) {
             console.log(`[milestones] sent ${milestone.kills}-kill message to ${player.playerName}`);
           } else {

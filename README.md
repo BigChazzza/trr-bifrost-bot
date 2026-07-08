@@ -111,16 +111,21 @@ token expiry don't crash the process.
 ## Known documentation drift
 
 Bifrost's public docs for `guildAddVip`/`guildRemoveVip` (as of writing) show
-flat arguments and a `{success, message}` response, but the **live** schema
-actually requires an `input: GuildAddVipInput!` / `input: GuildRemoveVipInput!`
-wrapper object, and the response type (`GuildVipMutationResponse`) has no
-`message` field — this was confirmed directly from a live 400 error's
-GraphQL validation messages, which name the exact expected types. `guildAddVip`'s
-fix is fully confirmed this way. `guildRemoveVip`'s input shape was inferred
-by analogy (same pattern, `playerName` dropped) since no live error has been
-seen for it yet — if the hourly VIP-expiry sweep ever logs a `guildRemoveVip`
-failure, check Render logs for the exact validation error and adjust
-`removeVip()` in `src/bifrostClient.js` accordingly.
+flat arguments including `gameType` and a `{success, message}` response, but
+the **live** schema:
+- requires an `input: GuildAddVipInput!` / `input: GuildRemoveVipInput!` wrapper
+- **rejects** `gameType` as an unknown field on these input types (confirmed via live 400 error)
+- **requires** `vipDuration: Int!` on `GuildAddVipInput` (confirmed via live 400 error)
+- returns `GuildVipMutationResponse` with no `message` field — only `success`
+
+`vipDuration` is passed as `7` (days, for a 7-day grant). The exact unit is
+assumed from context — if Bifrost uses a different unit (minutes/seconds),
+adjust the default in `addVip()` in `src/bifrostClient.js`.
+
+`guildMessagePlayer`'s `GuildMessagePlayerInput` also rejects `gameType` and
+additionally requires `playerName: String!` and `moderatorName: String!` —
+confirmed via live 400 errors. `moderatorName` is set to the bot's identity
+(`BigChazzza Bot`, configurable via the `BifrostClient` constructor).
 
 ## Unverified: multi-line message rendering in-game
 

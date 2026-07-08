@@ -19,7 +19,7 @@ function sleep(ms) {
 }
 
 export class BifrostClient {
-  constructor({ clientId, clientSecret, serverId, gameType = 'HLL', fetchFn = fetch }) {
+  constructor({ clientId, clientSecret, serverId, gameType = 'HLL', moderatorName = 'BigChazzza Bot', fetchFn = fetch }) {
     if (!clientId || !clientSecret || !serverId) {
       throw new Error('BifrostClient requires clientId, clientSecret, and serverId');
     }
@@ -27,6 +27,7 @@ export class BifrostClient {
     this.clientSecret = clientSecret;
     this.serverId = serverId;
     this.gameType = gameType;
+    this.moderatorName = moderatorName;
     this.fetchFn = fetchFn;
 
     this._accessToken = null;
@@ -158,17 +159,13 @@ export class BifrostClient {
   /**
    * guildAddVip — rate limit 150 req / 5min per server
    *
-   * NOTE: Bifrost's public docs (developer.bifrostgaming.com/hll/endpoints/add-vip)
-   * show flat arguments (serverId/playerId/playerName/gameType) and a
-   * {success, message} response, but the LIVE schema rejects that with a 400
-   * ("Unknown argument", confirmed on Render). The live schema actually
-   * requires an `input: GuildAddVipInput!` wrapper (matching the pattern
-   * already documented — and confirmed working — for guildSendMessageToAll
-   * and guildSetVIPSlotCount), and its response type (GuildVipMutationResponse,
-   * named in the live error text) has no `message` field — only `success`
-   * is confirmed to exist. Docs are simply stale for this endpoint.
+   * NOTE: Bifrost's public docs show flat arguments with gameType, but the LIVE
+   * schema requires an `input: GuildAddVipInput!` wrapper and rejects gameType
+   * (confirmed via 400 error). vipDuration is also required (Int!); unit is
+   * assumed to be days (unconfirmed from live API — adjust if Bifrost uses
+   * a different unit).
    */
-  async addVip(playerId, playerName) {
+  async addVip(playerId, playerName, vipDurationDays = 7) {
     const query = `
       mutation AddVip($input: GuildAddVipInput!) {
         guildAddVip(input: $input) {
@@ -177,12 +174,15 @@ export class BifrostClient {
       }
     `;
     const data = await this._graphqlRequest(query, {
-      input: { serverId: this.serverId, playerId, playerName, gameType: this.gameType },
+      input: { serverId: this.serverId, playerId, playerName, vipDuration: vipDurationDays },
     });
     return data?.guildAddVip ?? null;
   }
 
-  /** guildRemoveVip — rate limit 150 req / 5min per server. See addVip() note above; same input-wrapper fix applies. */
+  /**
+   * guildRemoveVip — rate limit 150 req / 5min per server.
+   * Same input-wrapper fix as addVip; gameType is not in GuildRemoveVipInput.
+   */
   async removeVip(playerId) {
     const query = `
       mutation RemoveVip($input: GuildRemoveVipInput!) {
@@ -192,17 +192,17 @@ export class BifrostClient {
       }
     `;
     const data = await this._graphqlRequest(query, {
-      input: { serverId: this.serverId, playerId, gameType: this.gameType },
+      input: { serverId: this.serverId, playerId },
     });
     return data?.guildRemoveVip ?? null;
   }
 
   /**
    * guildMessagePlayer — rate limit 150 req / 5min per server.
-   * NOTE: same flat-args vs input-wrapper mismatch as guildAddVip — live schema
-   * requires `input: GuildMessagePlayerInput!`, not bare serverId/playerId/etc.
+   * GuildMessagePlayerInput requires: serverId, playerId, playerName, message,
+   * moderatorName. No gameType field (confirmed via live 400 error).
    */
-  async messagePlayer(playerId, message) {
+  async messagePlayer(playerId, playerName, message) {
     const query = `
       mutation MessagePlayer($input: GuildMessagePlayerInput!) {
         guildMessagePlayer(input: $input) {
@@ -211,7 +211,7 @@ export class BifrostClient {
       }
     `;
     const data = await this._graphqlRequest(query, {
-      input: { serverId: this.serverId, playerId, message, gameType: this.gameType },
+      input: { serverId: this.serverId, playerId, playerName, message, moderatorName: this.moderatorName },
     });
     return data?.guildMessagePlayer ?? null;
   }
