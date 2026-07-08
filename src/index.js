@@ -37,7 +37,7 @@ async function main() {
   const serverId = requireEnv('BIFROST_SERVER_ID');
   const dbPath = process.env.DB_PATH || './trr-bot.db';
 
-  console.log('TRR Bifrost stats bot starting up');
+  console.log('TRR Bifrost stats bot starting up [build d580b31+]');
   console.log(`  client_id: ${maskSecret(clientId)}`);
   console.log(`  server_id: ${serverId}`);
   console.log(`  db_path:   ${dbPath}`);

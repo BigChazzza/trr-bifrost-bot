@@ -18,6 +18,7 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// v5 — messagePlayer uses playerName+moderatorName, no gameType
 export class BifrostClient {
   constructor({ clientId, clientSecret, serverId, gameType = 'HLL', moderatorName = 'BigChazzza Bot', fetchFn = fetch }) {
     if (!clientId || !clientSecret || !serverId) {
