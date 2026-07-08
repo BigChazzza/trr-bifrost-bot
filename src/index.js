@@ -93,16 +93,30 @@ async function main() {
         console.log(`[poll] server has players again (${playerCount}) - resuming 30-second poll interval`);
       }
 
-      const { transitioned, endedMatchEpoch, currentMatchEpoch, mapName } =
+      const { transitioned, endedMatchEpoch, currentMatchEpoch, mapName, matchTimeExpired } =
         matchTracker.processPoll(playersResult.players ?? [], gameState);
 
       console.log(
         `[poll] ${playerCount} players, map=${mapName ?? 'unknown'}, matchEpoch=${currentMatchEpoch}` +
-          (transitioned ? ` (transitioned from match ${endedMatchEpoch})` : '')
+          (transitioned ? ` (transitioned from match ${endedMatchEpoch})` : '') +
+          (matchTimeExpired ? ' (match clock hit 0)' : '')
       );
 
-      if (transitioned && endedMatchEpoch !== null) {
-        await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch });
+      if (matchTimeExpired) {
+        // Clock hit 0: award VIP now, at actual match end. Mark the epoch so
+        // the subsequent map-change transition doesn't double-send awards.
+        console.log(`[vip] match ${currentMatchEpoch} clock expired, awarding VIP now`);
+        await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch: currentMatchEpoch });
+        db.setMatchAwardsGranted(currentMatchEpoch);
+      } else if (transitioned && endedMatchEpoch !== null) {
+        // Map changed (or clock jumped): fall back to transition-based awards.
+        // Skip if time-expiry already fired them (common path after a normal match).
+        if (db.getMatchAwardsGranted(endedMatchEpoch)) {
+          console.log(`[vip] match ${endedMatchEpoch} awards already sent at time-expiry, skipping`);
+        } else {
+          await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch });
+          db.setMatchAwardsGranted(endedMatchEpoch);
+        }
       }
 
       await checkKillMilestones(currentMatchEpoch);

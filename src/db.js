@@ -4,7 +4,8 @@ const SCHEMA = `
 CREATE TABLE IF NOT EXISTS matches (
   match_epoch INTEGER PRIMARY KEY AUTOINCREMENT,
   map_name TEXT,
-  started_at TEXT NOT NULL
+  started_at TEXT NOT NULL,
+  awards_granted INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS player_match_stats (
@@ -139,6 +140,7 @@ export function openDb(dbPath) {
   // since that migration's INSERT...SELECT copies those columns across -
   // on a truly first-generation database (before ANY of these migrations
   // ever ran) they wouldn't exist yet otherwise.
+  addColumnIfMissing(db, 'matches', 'awards_granted INTEGER NOT NULL DEFAULT 0', 'awards_granted');
   addColumnIfMissing(db, 'player_match_stats', 'is_vip INTEGER NOT NULL DEFAULT 0', 'is_vip');
   addColumnIfMissing(db, 'player_match_stats', 'baseline_combat_score INTEGER NOT NULL DEFAULT 0', 'baseline_combat_score');
   addColumnIfMissing(db, 'player_match_stats', 'baseline_defense_score INTEGER NOT NULL DEFAULT 0', 'baseline_defense_score');
@@ -203,6 +205,12 @@ export function openDb(dbPath) {
     ),
     getPlayersForMilestoneCheck: db.prepare(
       'SELECT player_id, player_name, notified_kill_milestone, (last_kills - baseline_kills) AS kills FROM player_match_stats WHERE match_epoch = ?'
+    ),
+    setMatchAwardsGranted: db.prepare(
+      'UPDATE matches SET awards_granted = 1 WHERE match_epoch = ?'
+    ),
+    getMatchAwardsGranted: db.prepare(
+      'SELECT awards_granted FROM matches WHERE match_epoch = ?'
     ),
   };
 
@@ -348,6 +356,17 @@ export function openDb(dbPath) {
     /** Updates the highest kill milestone sent for a player in a match. */
     setNotifiedMilestone(matchEpoch, playerId, milestone) {
       stmts.setNotifiedMilestone.run(milestone, matchEpoch, playerId);
+    },
+
+    /** Marks a match as having had its end-of-match VIP awards sent. */
+    setMatchAwardsGranted(matchEpoch) {
+      stmts.setMatchAwardsGranted.run(matchEpoch);
+    },
+
+    /** Returns true if end-of-match VIP awards have already been sent for this epoch. */
+    getMatchAwardsGranted(matchEpoch) {
+      const row = stmts.getMatchAwardsGranted.get(matchEpoch);
+      return row?.awards_granted === 1;
     },
   };
 }

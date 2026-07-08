@@ -19,7 +19,7 @@ export class MatchTracker {
   /**
    * @param {Array<{playerId: string, playerName: string, kills: number, deaths: number, isVip?: boolean, combatScore?: number, defenseScore?: number}>} players
    * @param {{data?: {currentMap?: string}, matchTimeRemainingSeconds?: number} | null} gameState
-   * @returns {{transitioned: boolean, endedMatchEpoch: number|null, currentMatchEpoch: number, mapName: string|null}}
+   * @returns {{transitioned: boolean, endedMatchEpoch: number|null, currentMatchEpoch: number, mapName: string|null, matchTimeExpired: boolean}}
    */
   processPoll(players, gameState) {
     const currentMap = gameState?.data?.currentMap ?? null;
@@ -54,6 +54,15 @@ export class MatchTracker {
       }
     }
 
+    // True only on the single poll where the clock transitions from >0 to 0
+    // (and no map-change transition happened simultaneously). Used to fire
+    // VIP awards at actual match end rather than waiting for the next map.
+    const matchTimeExpired =
+      !transitioned &&
+      lastTimeRemaining !== null &&
+      lastTimeRemaining > 0 &&
+      timeRemaining === 0;
+
     this.db.setLastKnownMap(currentMap);
     this.db.setLastTimeRemaining(timeRemaining);
 
@@ -71,6 +80,6 @@ export class MatchTracker {
       );
     }
 
-    return { transitioned, endedMatchEpoch, currentMatchEpoch, mapName: currentMap };
+    return { transitioned, endedMatchEpoch, currentMatchEpoch, mapName: currentMap, matchTimeExpired };
   }
 }
