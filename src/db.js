@@ -358,6 +358,22 @@ export function openDb(dbPath) {
       stmts.setNotifiedMilestone.run(milestone, matchEpoch, playerId);
     },
 
+    /**
+     * Returns the last known pendingNextMap value:
+     *   undefined = key never written (first boot, skip detection this poll)
+     *   null      = was explicitly null last poll
+     *   string    = had a value last poll
+     */
+    getLastPendingNextMap() {
+      const row = stmts.getBotState.get('last_pending_next_map');
+      if (!row) return undefined;
+      return row.value === '' ? null : row.value;
+    },
+
+    setLastPendingNextMap(value) {
+      stmts.setBotState.run('last_pending_next_map', value ?? '');
+    },
+
     /** Marks a match as having had its end-of-match VIP awards sent. */
     setMatchAwardsGranted(matchEpoch) {
       stmts.setMatchAwardsGranted.run(matchEpoch);

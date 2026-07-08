@@ -150,6 +150,7 @@ export class BifrostClient {
           data
           timestamp
           matchTimeRemainingSeconds
+          pendingNextMap
         }
       }
     `;

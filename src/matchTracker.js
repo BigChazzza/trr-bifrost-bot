@@ -18,18 +18,20 @@ export class MatchTracker {
 
   /**
    * @param {Array<{playerId: string, playerName: string, kills: number, deaths: number, isVip?: boolean, combatScore?: number, defenseScore?: number}>} players
-   * @param {{data?: {currentMap?: string}, matchTimeRemainingSeconds?: number} | null} gameState
-   * @returns {{transitioned: boolean, endedMatchEpoch: number|null, currentMatchEpoch: number, mapName: string|null, matchTimeExpired: boolean}}
+   * @param {{data?: {currentMap?: string}, matchTimeRemainingSeconds?: number, pendingNextMap?: string|null} | null} gameState
+   * @returns {{transitioned: boolean, endedMatchEpoch: number|null, currentMatchEpoch: number, mapName: string|null, matchEndDetected: boolean, matchEndReason: string|null}}
    */
   processPoll(players, gameState) {
     const currentMap = gameState?.data?.currentMap ?? null;
     const timeRemaining = typeof gameState?.matchTimeRemainingSeconds === 'number'
       ? gameState.matchTimeRemainingSeconds
       : null;
+    const pendingNextMap = gameState?.pendingNextMap ?? null;
 
     let currentMatchEpoch = this.db.getCurrentMatchEpoch();
     const lastMap = this.db.getLastKnownMap();
     const lastTimeRemaining = this.db.getLastTimeRemaining();
+    const lastPendingNextMap = this.db.getLastPendingNextMap(); // undefined = first boot
 
     let transitioned = false;
     let endedMatchEpoch = null;
@@ -54,17 +56,31 @@ export class MatchTracker {
       }
     }
 
-    // True only on the single poll where the clock transitions from >0 to 0
-    // (and no map-change transition happened simultaneously). Used to fire
-    // VIP awards at actual match end rather than waiting for the next map.
+    // Signal 1: clock hit exactly 0. Narrow window — the 30s poll can miss
+    // this if the match ends with < 30s left and the map reloads before the
+    // next tick (covered by the transition fallback in that case).
     const matchTimeExpired =
       !transitioned &&
       lastTimeRemaining !== null &&
       lastTimeRemaining > 0 &&
       timeRemaining === 0;
 
+    // Signal 2: pendingNextMap went from null → non-null. This happens when
+    // the map vote completes or the next map is queued during the end-of-match
+    // results screen — a persistent signal that lasts 20-60s, so the 30s poll
+    // won't miss it. lastPendingNextMap === undefined means this is the first
+    // boot poll; skip detection to avoid a false positive on startup.
+    const pendingNextMapQueued =
+      !transitioned &&
+      lastPendingNextMap === null &&
+      pendingNextMap !== null;
+
+    const matchEndDetected = matchTimeExpired || pendingNextMapQueued;
+    const matchEndReason = matchTimeExpired ? 'clock=0' : pendingNextMapQueued ? 'pendingNextMap' : null;
+
     this.db.setLastKnownMap(currentMap);
     this.db.setLastTimeRemaining(timeRemaining);
+    this.db.setLastPendingNextMap(pendingNextMap);
 
     for (const player of players ?? []) {
       if (!player?.playerId) continue;
@@ -80,6 +96,6 @@ export class MatchTracker {
       );
     }
 
-    return { transitioned, endedMatchEpoch, currentMatchEpoch, mapName: currentMap, matchTimeExpired };
+    return { transitioned, endedMatchEpoch, currentMatchEpoch, mapName: currentMap, matchEndDetected, matchEndReason };
   }
 }

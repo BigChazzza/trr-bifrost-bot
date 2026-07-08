@@ -93,27 +93,28 @@ async function main() {
         console.log(`[poll] server has players again (${playerCount}) - resuming 30-second poll interval`);
       }
 
-      const { transitioned, endedMatchEpoch, currentMatchEpoch, mapName, matchTimeExpired } =
+      const { transitioned, endedMatchEpoch, currentMatchEpoch, mapName, matchEndDetected, matchEndReason } =
         matchTracker.processPoll(playersResult.players ?? [], gameState);
 
       console.log(
         `[poll] ${playerCount} players, map=${mapName ?? 'unknown'}, matchEpoch=${currentMatchEpoch}` +
           (transitioned ? ` (transitioned from match ${endedMatchEpoch})` : '') +
-          (matchTimeExpired ? ' (match clock hit 0)' : '')
+          (matchEndDetected ? ` (match end detected: ${matchEndReason})` : '')
       );
 
-      if (matchTimeExpired) {
-        // Clock hit 0: award VIP now, at actual match end. Mark the epoch so
-        // the subsequent map-change transition doesn't double-send awards.
-        console.log(`[vip] match ${currentMatchEpoch} clock expired, awarding VIP now`);
+      if (matchEndDetected) {
+        // Match end detected before the new map loads — award VIP now.
+        // Mark the epoch so the subsequent map-change transition doesn't double-send.
+        console.log(`[vip] match ${currentMatchEpoch} ended (${matchEndReason}), awarding VIP now`);
         await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch: currentMatchEpoch });
         db.setMatchAwardsGranted(currentMatchEpoch);
       } else if (transitioned && endedMatchEpoch !== null) {
         // Map changed (or clock jumped): fall back to transition-based awards.
-        // Skip if time-expiry already fired them (common path after a normal match).
+        // Skip if an earlier signal already fired them (common path after a normal match).
         if (db.getMatchAwardsGranted(endedMatchEpoch)) {
-          console.log(`[vip] match ${endedMatchEpoch} awards already sent at time-expiry, skipping`);
+          console.log(`[vip] match ${endedMatchEpoch} awards already sent, skipping transition fallback`);
         } else {
+          console.log(`[vip] match ${endedMatchEpoch} end was not detected early — awarding at transition`);
           await awardMatchEndVIPs({ db, bifrost, endedMatchEpoch });
           db.setMatchAwardsGranted(endedMatchEpoch);
         }
